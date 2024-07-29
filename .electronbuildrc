@@ -64,7 +64,7 @@
   },
   "publish": {
     "provider": "github",
-    "owner": "asgardex",
+    "owner": "LongCX",
     "repo": "asgardex-desktop",
     "private": false
   }
