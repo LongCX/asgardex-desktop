@@ -13,7 +13,7 @@ import { AVAXChain } from '@xchainjs/xchain-avax'
 import { BSCChain } from '@xchainjs/xchain-bsc'
 import { Network } from '@xchainjs/xchain-client'
 import { ETHChain } from '@xchainjs/xchain-ethereum'
-import { AssetCacao } from '@xchainjs/xchain-mayachain'
+import { AssetCacao, MAYAChain } from '@xchainjs/xchain-mayachain'
 import { MayachainQuery, QuoteSwap, QuoteSwapParams as QuoteSwapParamsMaya } from '@xchainjs/xchain-mayachain-query'
 import { AssetRuneNative, THORChain } from '@xchainjs/xchain-thorchain'
 import { InboundDetail, QuoteSwapParams, ThorchainQuery, TxDetails } from '@xchainjs/xchain-thorchain-query'
@@ -29,6 +29,7 @@ import {
   isSynthAsset,
   CryptoAmount
 } from '@xchainjs/xchain-util'
+import { Row } from 'antd'
 import BigNumber from 'bignumber.js'
 import * as A from 'fp-ts/Array'
 import * as FP from 'fp-ts/function'
@@ -47,7 +48,7 @@ import {
   ASGARDEX_THORNAME
 } from '../../../shared/const'
 import { ONE_RUNE_BASE_AMOUNT } from '../../../shared/mock/amount'
-import { chainToString } from '../../../shared/utils/chain'
+import { chainToString, DEFAULT_ENABLED_CHAINS, EnabledChain } from '../../../shared/utils/chain'
 import { isLedgerWallet } from '../../../shared/utils/guard'
 import { WalletType } from '../../../shared/wallet/types'
 import { ZERO_BASE_AMOUNT } from '../../const'
@@ -127,6 +128,7 @@ import { PoolDetails as PoolDetailsMaya } from '../../services/mayaMigard/types'
 import { getPoolDetail as getPoolDetailMaya } from '../../services/mayaMigard/utils'
 import { PoolAddress, PoolDetails, PoolsDataMap } from '../../services/midgard/types'
 import { getPoolDetail } from '../../services/midgard/utils'
+import { userChains$ } from '../../services/storage/userChains'
 import {
   ApiError,
   KeystoreState,
@@ -288,11 +290,11 @@ export const Swap = ({
   const [oQuoteMaya, setQuoteMaya] = useState<O.Option<QuoteSwap>>(O.none)
 
   // Default Streaming interval set to 1 blocks
-  const [streamingInterval, setStreamingInterval] = useState<number>(dex.chain === THORChain ? 1 : 3)
-  // Default Streaming quantity set to 0 network computes the optimum
+  const [streamingInterval, setStreamingInterval] = useState<number>(dex.chain === THORChain ? 1 : 5)
+  // Default Streaming quantity set to 0, network computes the optimum
   const [streamingQuantity, setStreamingQuantity] = useState<number>(0)
   // Slide use state
-  const [slider, setSlider] = useState<number>(dex.chain === THORChain ? 26 : 76)
+  const [slider, setSlider] = useState<number>(dex.chain === THORChain ? 26 : 50)
 
   const [oTargetWalletType, setTargetWalletType] = useState<O.Option<WalletType>>(oInitialTargetWalletType)
 
@@ -304,6 +306,26 @@ export const Swap = ({
   }, [oInitialTargetWalletType])
 
   const { balances: oWalletBalances, loading: walletBalancesLoading } = walletBalances
+
+  const [enabledChains, setEnabledChains] = useState<Set<EnabledChain>>(new Set())
+  const [disabledChains, setDisabledChains] = useState<EnabledChain[]>([])
+
+  const isTargetChainDisabled = disabledChains.includes(targetAsset.chain)
+  const isSourceChainDisabled = disabledChains.includes(sourceAsset.chain)
+
+  useEffect(() => {
+    const subscription = userChains$.subscribe((chains: EnabledChain[]) => {
+      setEnabledChains(new Set(chains))
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const defaultChains = Object.keys(DEFAULT_ENABLED_CHAINS) as EnabledChain[]
+    const disabled = defaultChains.filter((chain) => !enabledChains.has(chain))
+    setDisabledChains(disabled)
+  }, [enabledChains])
 
   // ZERO `BaseAmount` for target Asset - original decimal
   const zeroTargetBaseAmountMax = useMemo(() => baseAmount(0, targetAssetDecimal), [targetAssetDecimal])
@@ -1732,9 +1754,9 @@ export const Swap = ({
 
   // Function to reset the slider to default position
   const resetToDefault = () => {
-    setStreamingInterval(dex.chain === THORChain ? 1 : 3) // Default position
+    setStreamingInterval(dex.chain === THORChain ? 1 : 5) // Default position
     setStreamingQuantity(0) // thornode | mayanode decides the swap quantity
-    setSlider(26)
+    setSlider(dex.chain === THORChain ? 26 : 50)
     setIsStreaming(true)
   }
   const quoteOnlyButton = () => {
@@ -1747,10 +1769,20 @@ export const Swap = ({
   // Streaming Interval slider
   const renderStreamerInterval = useMemo(() => {
     const calculateStreamingInterval = (slider: number) => {
-      if (slider >= 75) return 3
-      if (slider >= 50) return 2
-      if (slider >= 25) return 1
-      return 0
+      if (dex.chain === THORChain) {
+        if (slider >= 75) return 3
+        if (slider >= 50) return 2
+        if (slider >= 25) return 1
+        return 0
+      } else if (dex.chain === MAYAChain) {
+        if (slider >= 90) return 10
+        if (slider >= 70) return 8
+        if (slider >= 50) return 5
+        if (slider >= 30) return 3
+        if (slider >= 10) return 1
+        return 0
+      }
+      return 3 // Default for other chains
     }
     const streamingIntervalValue = calculateStreamingInterval(slider)
     const setInterval = (slider: number) => {
@@ -1779,7 +1811,7 @@ export const Swap = ({
         />
       </div>
     )
-  }, [slider, streamingInterval])
+  }, [dex.chain, slider, streamingInterval])
 
   // Streaming Quantity slider
   const renderStreamerQuantity = useMemo(() => {
@@ -2514,7 +2546,9 @@ export const Swap = ({
         O.isNone(oRecipientAddress) ||
         !canSwap ||
         customAddressEditActive ||
-        quoteExpired),
+        quoteExpired ||
+        isTargetChainDisabled ||
+        isSourceChainDisabled),
     [
       network,
       disableSwapAction,
@@ -2532,7 +2566,9 @@ export const Swap = ({
       oRecipientAddress,
       canSwap,
       customAddressEditActive,
-      quoteExpired
+      quoteExpired,
+      isTargetChainDisabled,
+      isSourceChainDisabled
     ]
   )
 
@@ -2701,13 +2737,46 @@ export const Swap = ({
     <div className="my-20px flex w-full max-w-[500px] flex-col justify-between">
       <div>
         {/* Note: Input value is shown as AssetAmount */}
-        <FlatButton
-          onClick={quoteOnlyButton}
-          size="small"
-          color={quoteOnly ? 'warning' : 'primary'}
-          className="mb-20px rounded-full hover:shadow-full group-hover:rotate-180 dark:hover:shadow-fulld">
-          {quoteOnly ? 'Quote Only' : 'Quote & Swap'}
-        </FlatButton>
+        <Row>
+          {' '}
+          <FlatButton
+            onClick={quoteOnlyButton}
+            size="small"
+            color={quoteOnly ? 'warning' : 'primary'}
+            className="mb-20px  rounded-full hover:shadow-full group-hover:rotate-180 dark:hover:shadow-fulld">
+            {quoteOnly ? 'Quote Only' : 'Quote & Swap'}
+          </FlatButton>
+          {disabledChains.length > 0 ? (
+            <div className="text-12 text-gray2 dark:border-gray1d dark:text-gray2d">
+              <div className="flex pb-4">
+                {(isTargetChainDisabled || isSourceChainDisabled) && (
+                  <>
+                    <div className="rounded text-warning0 dark:text-warning0d">
+                      {intl.formatMessage(
+                        { id: 'common.chainDisabled' },
+                        { chain: isTargetChainDisabled ? targetAsset.chain : sourceAsset.chain }
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          ) : (
+            <></>
+          )}
+          {dex.chain === MAYAChain && (
+            // Temp fix, delete when ready
+            <div className="text-12 text-gray2 dark:border-gray1d dark:text-gray2d">
+              <div className="flex pb-4">
+                <div className="rounded text-warning0 dark:text-warning0d">
+                  {targetAsset.synth && (
+                    <>{`Currently mayanode cant handle streaming to synths, please drag interval slider to position 0 for limit swap`}</>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </Row>
         <AssetInput
           className="w-full"
           title={intl.formatMessage({ id: 'swap.input' })}
