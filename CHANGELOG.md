@@ -4,6 +4,10 @@
 
 - fixed Maya.maya send [#378](https://github.com/asgardex/asgardex-desktop/pull/379)
 - fix Evm deriv paths [#](https://github.com/asgardex/asgardex-desktop/pull/379)
+- fix ledger approve [#390](https://github.com/asgardex/asgardex-desktop/pull/379)
+- fix Cosmos Send Form [#391](https://github.com/asgardex/asgardex-desktop/pull/392)
+- add trade Asset Handling [#381](https://github.com/asgardex/asgardex-desktop/pull/384)
+- update Unlock Wallet Form [#395](https://github.com/asgardex/asgardex-desktop/pull/395)
 
 # 1.22.5 (2024-09-6)
 
