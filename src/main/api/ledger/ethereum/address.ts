@@ -1,15 +1,15 @@
 import type Transport from '@ledgerhq/hw-transport'
 import { Network } from '@xchainjs/xchain-client'
-import { ETHChain } from '@xchainjs/xchain-ethereum'
+import { ETHChain, defaultEthParams } from '@xchainjs/xchain-ethereum'
 import * as ETH from '@xchainjs/xchain-evm'
 import * as E from 'fp-ts/Either'
 
 import { LedgerError, LedgerErrorId } from '../../../../shared/api/types'
-import { defaultEthParams } from '../../../../shared/ethereum/const'
 import { getDerivationPath, getDerivationPaths } from '../../../../shared/evm/ledger'
 import { EvmHDMode } from '../../../../shared/evm/types'
 import { isError } from '../../../../shared/utils/guard'
 import { WalletAddress } from '../../../../shared/wallet/types'
+import { ETH_MAINNET_ETHERS_PROVIDER, ETH_TESTNET_ETHERS_PROVIDER } from './common'
 
 export const getAddress = async ({
   transport,
@@ -27,9 +27,14 @@ export const getAddress = async ({
   try {
     const ledgerClient = new ETH.ClientLedger({
       ...defaultEthParams,
+      providers: {
+        mainnet: ETH_MAINNET_ETHERS_PROVIDER,
+        testnet: ETH_TESTNET_ETHERS_PROVIDER,
+        stagenet: ETH_MAINNET_ETHERS_PROVIDER
+      },
       signer: new ETH.LedgerSigner({
         transport,
-        provider: defaultEthParams.providers[Network.Mainnet],
+        provider: ETH_MAINNET_ETHERS_PROVIDER,
         derivationPath: getDerivationPath(walletAccount, evmHDMode)
       }),
       rootDerivationPaths: getDerivationPaths(walletAccount, evmHDMode),
@@ -67,9 +72,14 @@ export const verifyAddress = async ({
 }) => {
   const ledgerClient = new ETH.ClientLedger({
     ...defaultEthParams,
+    providers: {
+      mainnet: ETH_MAINNET_ETHERS_PROVIDER,
+      testnet: ETH_TESTNET_ETHERS_PROVIDER,
+      stagenet: ETH_MAINNET_ETHERS_PROVIDER
+    },
     signer: new ETH.LedgerSigner({
       transport,
-      provider: defaultEthParams.providers[Network.Mainnet],
+      provider: ETH_MAINNET_ETHERS_PROVIDER,
       derivationPath: getDerivationPath(walletAccount, evmHDMode)
     }),
     rootDerivationPaths: getDerivationPaths(walletAccount, evmHDMode),

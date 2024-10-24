@@ -103,7 +103,7 @@ import { getSwapMemo, shortenMemo } from '../../helpers/memoHelper'
 import * as PoolHelpers from '../../helpers/poolHelper'
 import { isPoolDetails } from '../../helpers/poolHelper'
 import { getPoolPriceValue as getPoolPriceValueM } from '../../helpers/poolHelperMaya'
-import { liveData, LiveData } from '../../helpers/rx/liveData'
+import { LiveData } from '../../helpers/rx/liveData'
 import { emptyString, hiddenString, loadingString, noDataString } from '../../helpers/stringHelper'
 import { calculateTransactionTime, formatSwapTime, Time } from '../../helpers/timeHelper'
 import {
@@ -547,8 +547,10 @@ export const Swap = ({
         memo: swapMemo,
         outAsset: targetAsset
       }),
-      liveData.map((chainFees) => {
-        prevChainFees.current = O.some(chainFees)
+      RxOp.map((chainFees) => {
+        if (RD.isSuccess(chainFees)) {
+          prevChainFees.current = O.some(chainFees.value)
+        }
         return chainFees
       })
     )
@@ -571,11 +573,13 @@ export const Swap = ({
     if (lockedWallet || quoteOnly) {
       return lockedAssetAmount.baseAmount
     }
-
+    const feeAmount = swapFees.inFee.amount.amount().toNumber()
+    const roundedFee = Math.ceil(feeAmount / 1000) * 1000
+    const roundedFeeBaseAmount = baseAmount(roundedFee)
     return Utils.maxAmountToSwapMax1e8({
       asset: sourceAsset,
       balanceAmountMax1e8: sourceAssetAmountMax1e8,
-      feeAmount: swapFees.inFee.amount
+      feeAmount: roundedFeeBaseAmount
     })
   }, [
     lockedAssetAmount.baseAmount,
@@ -1504,9 +1508,11 @@ export const Swap = ({
       RxOp.switchMap((params) =>
         FP.pipe(
           approveFee$(params),
-          liveData.map((fee) => {
+          RxOp.map((fee) => {
             // store every successfully loaded fees
-            prevApproveFee.current = O.some(fee)
+            if (RD.isSuccess(fee)) {
+              prevApproveFee.current = O.some(fee.value)
+            }
             return fee
           })
         )
@@ -1766,7 +1772,7 @@ export const Swap = ({
   }
 
   const labelMin = useMemo(
-    () => (slider <= 0 ? `Limit Swap` : `` || slider < 50 ? 'Time Optimised' : `Price Optimised`),
+    () => (slider <= 0 ? `Limit Swap` : slider < 50 ? 'Time Optimised' : `Price Optimised`),
     [slider]
   )
 
@@ -1831,7 +1837,7 @@ export const Swap = ({
       toolTip =
         quantity === 0
           ? `${dex.chain === THORChain ? 'Thornode' : 'Mayanode'} decides the swap count`
-          : `` || quantity === maxStreamingQuantity
+          : quantity === maxStreamingQuantity
           ? `Max sub swaps ${maxStreamingQuantity}`
           : ''
     }
@@ -2746,6 +2752,7 @@ export const Swap = ({
           amount={{ amount: amountToSwapMax1e8, asset: sourceAsset }}
           priceAmount={{ asset: priceAmountToSwapMax1e8.asset, amount: priceAmountToSwapMax1e8.baseAmount }}
           assets={selectableSourceAssets}
+          walletBalance={sourceAssetAmountMax1e8}
           network={network}
           hasAmountShortcut
           onChangeAsset={setSourceAsset}

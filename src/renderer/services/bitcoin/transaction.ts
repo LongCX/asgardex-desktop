@@ -6,21 +6,22 @@ import * as FP from 'fp-ts/lib/function'
 import * as Rx from 'rxjs'
 import * as RxOp from 'rxjs/operators'
 
+import { blockcypherApiKey } from '../../../shared/api/blockcypher'
 import { IPCLedgerSendTxParams, ipcLedgerSendTxParamsIO } from '../../../shared/api/io'
 import { LedgerError } from '../../../shared/api/types'
 import { AssetBTC } from '../../../shared/utils/asset'
 import { isLedgerWallet } from '../../../shared/utils/guard'
 import { Network$ } from '../app/types'
 import * as C from '../clients'
+import { SendTxParams, TransactionService } from '../utxo/types'
 import { TxHashLD, ErrorId } from '../wallet/types'
-import { TransactionService } from './types'
-import { Client$, SendTxParams } from './types'
+import { Client$ } from './types'
 
 export const createTransactionService = (client$: Client$, network$: Network$): TransactionService => {
   const common = C.createTransactionService(client$)
 
   const sendLedgerTx = ({ network, params }: { network: Network; params: SendTxParams }): TxHashLD => {
-    const { amount, sender, recipient, memo, walletAccount, walletIndex, feeRate } = params
+    const { amount, sender, recipient, memo, walletAccount, walletIndex, feeRate, feeOption } = params
     const sendLedgerTxParams: IPCLedgerSendTxParams = {
       chain: BTCChain,
       asset: AssetBTC,
@@ -29,14 +30,15 @@ export const createTransactionService = (client$: Client$, network$: Network$): 
       amount,
       sender,
       feeRate,
-      feeOption: undefined,
+      feeOption,
       feeAmount: undefined,
       recipient,
       memo,
       walletAccount,
       walletIndex,
       nodeUrl: undefined,
-      hdMode: 'default'
+      hdMode: 'default',
+      apiKey: blockcypherApiKey
     }
 
     const encoded = ipcLedgerSendTxParamsIO.encode(sendLedgerTxParams)

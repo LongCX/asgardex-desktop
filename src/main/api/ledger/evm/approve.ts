@@ -1,13 +1,15 @@
 import TransportNodeHidSingleton from '@ledgerhq/hw-transport-node-hid-singleton'
 import { FeeOption, Network, TxHash } from '@xchainjs/xchain-client'
+import { defaultEthParams } from '@xchainjs/xchain-ethereum'
 import { ClientLedger, LedgerSigner } from '@xchainjs/xchain-evm'
+import { ethers } from 'ethers'
 
 import { IPCLedgerApproveERC20TokenParams } from '../../../../shared/api/io'
 import { defaultArbParams } from '../../../../shared/arb/const'
 import { defaultAvaxParams } from '../../../../shared/avax/const'
 import { defaultBscParams } from '../../../../shared/bsc/const'
-import { defaultEthParams } from '../../../../shared/ethereum/const'
 import { getDerivationPath, getDerivationPaths } from '../../../../shared/evm/ledger'
+import { ETH_MAINNET_ETHERS_PROVIDER, ETH_TESTNET_ETHERS_PROVIDER, createEthProviders } from '../ethereum/common'
 
 export const approveLedgerERC20Token = async ({
   chain,
@@ -16,7 +18,8 @@ export const approveLedgerERC20Token = async ({
   spenderAddress,
   walletAccount,
   walletIndex,
-  hdMode
+  hdMode,
+  apiKey
 }: IPCLedgerApproveERC20TokenParams): Promise<TxHash> => {
   let clientParams
   const transport = await TransportNodeHidSingleton.create()
@@ -24,9 +27,15 @@ export const approveLedgerERC20Token = async ({
     case 'ETH':
       clientParams = {
         ...defaultEthParams,
+        providers: {
+          mainnet: new ethers.providers.EtherscanProvider('homestead', apiKey),
+          testnet: ETH_TESTNET_ETHERS_PROVIDER,
+          stagenet: ETH_MAINNET_ETHERS_PROVIDER
+        },
+        dataProviders: [createEthProviders(apiKey)],
         signer: new LedgerSigner({
           transport,
-          provider: defaultEthParams.providers[Network.Mainnet],
+          provider: new ethers.providers.EtherscanProvider('homestead', apiKey),
           derivationPath: getDerivationPath(walletAccount, hdMode)
         }),
         rootDerivationPaths: getDerivationPaths(walletAccount, hdMode),
